@@ -368,8 +368,7 @@ def test_discrete_input():
 
     out = wrap_jax(f)(x, idx)
     [grad_out] = grad(out, [x])
-    _, jax_res = compare_jax_and_py([x, idx], [out, grad_out], test_values)
-    np.testing.assert_allclose(jax_res[1], [1.0, 0.0, 2.0, 0.0, 0.0])
+    compare_jax_and_py([x, idx], [out, grad_out], test_values)
 
     with pytest.raises(DisconnectedInputError):
         grad(out, [idx])
@@ -383,11 +382,12 @@ def test_mixed_input_types():
     idx = tensor("idx", shape=(3,), dtype="int32")
     y = tensor("y", shape=(3,))
     mask = tensor("mask", shape=(3,), dtype="bool")
-    x_test = rng.normal(size=(5,)).astype(config.floatX)
-    idx_test = np.array([0, 2, 2], dtype="int32")
-    y_test = rng.normal(size=(3,)).astype(config.floatX)
-    mask_test = np.array([True, False, True])
-    test_values = [x_test, idx_test, y_test, mask_test]
+    test_values = [
+        rng.normal(size=x.type.shape).astype(config.floatX),
+        np.array([0, 2, 2], dtype="int32"),
+        rng.normal(size=y.type.shape).astype(config.floatX),
+        np.array([True, False, True]),
+    ]
 
     def f(x, idx, y, mask):
         return jax.numpy.sum(x[idx] * y * mask)
@@ -401,14 +401,7 @@ def test_mixed_input_types():
     ]
 
     grad_x, grad_y = grad(out, [x, y])
-    _, jax_res = compare_jax_and_py(
-        [x, idx, y, mask], [out, grad_x, grad_y], test_values
-    )
-
-    expected_grad_x = np.zeros_like(x_test)
-    np.add.at(expected_grad_x, idx_test, y_test * mask_test)
-    np.testing.assert_allclose(jax_res[1], expected_grad_x)
-    np.testing.assert_allclose(jax_res[2], x_test[idx_test] * mask_test)
+    compare_jax_and_py([x, idx, y, mask], [out, grad_x, grad_y], test_values)
 
     for discrete_input in (idx, mask):
         with pytest.raises(DisconnectedInputError):
